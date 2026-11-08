@@ -1,0 +1,166 @@
+﻿EDUINFOGRAPHIC AI
+LAPORAN PEMERIKSAAN IMAGE GENERATION
+
+Tanggal: 08-11-2026 23:46:41
+File: server/index.js
+
+========================================
+HASIL PEMERIKSAAN KODE
+========================================
+
+
+  index.js:48:  }
+  index.js:49:
+  index.js:50:  return { base, key };
+  index.js:51:}
+  index.js:52:
+> index.js:53:async function omniFetch(path, options = {}) {
+  index.js:54:  const { base, key } = getOmniConfig();
+  index.js:55:
+  index.js:56:  return fetch(`${base}${path}`, {
+  index.js:57:    ...options,
+  index.js:58:    headers: {
+  index.js:59:      Authorization: `Bearer ${key}`,
+  index.js:60:      ...(options.headers || {})
+  index.js:61:    }
+  index.js:62:  });
+  index.js:63:}
+  index.js:64:
+  index.js:65:// ==========================================
+  index.js:207:app.get("/", (_req, res) => {
+  index.js:208:  res.send("EduInfographic AI Backend is Running!");
+  index.js:209:});
+  index.js:210:
+  index.js:211:// Health check tests whether the OmniRoute host can be reached.
+> index.js:212:// It does not depend on /v1/models authorization.
+  index.js:213:app.get("/api/health", async (_req, res) => {
+  index.js:214:  try {
+  index.js:215:    const { base } = getOmniConfig();
+  index.js:216:
+  index.js:217:    let reachable = false;
+  index.js:218:    let upstreamStatus = null;
+  index.js:219:
+  index.js:220:    try {
+  index.js:221:      const response = await fetch(base, { method: "GET" });
+  index.js:222:      reachable = true;
+  index.js:223:      upstreamStatus = response.status;
+  index.js:224:    } catch {
+  index.js:241:  }
+  index.js:242:});
+  index.js:243:
+  index.js:244:// ==========================================
+  index.js:245:// MODEL CATALOG
+> index.js:246:// Note: /v1/models may have separate permissions
+  index.js:247:// on some OmniRoute self-hosted configurations.
+  index.js:248:// ==========================================
+> index.js:249:app.get("/api/models", async (_req, res) => {
+  index.js:250:  try {
+  index.js:251:    const [chatRes, imageRes] = await Promise.all([
+> index.js:252:      omniFetch("/v1/models?kind=chat&prefix=alias"),
+> index.js:253:      omniFetch("/v1/models?kind=image&prefix=alias")
+  index.js:254:    ]);
+  index.js:255:
+  index.js:256:    const [chatText, imageText] = await Promise.all([
+  index.js:257:      chatRes.text(),
+  index.js:258:      imageRes.text()
+  index.js:259:    ]);
+  index.js:260:
+  index.js:261:    if (!chatRes.ok) {
+  index.js:262:      return res.status(chatRes.status).json({
+  index.js:263:        error: "Gagal mengambil katalog model chat.",
+  index.js:264:        detail: chatText.slice(0, 1200)
+  index.js:265:      });
+  index.js:332:
+  index.js:333:    // 3. Build prompt HERE, after excerpt is defined.
+  index.js:334:    const prompt = buildInfographicPrompt(excerpt);
+  index.js:335:
+  index.js:336:    // 4. Send request through authenticated OmniRoute helper
+> index.js:337:    const response = await omniFetch("/v1/chat/completions", {
+  index.js:338:      method: "POST",
+  index.js:339:      headers: {
+  index.js:340:        "Content-Type": "application/json"
+  index.js:341:      },
+  index.js:342:      body: JSON.stringify({
+  index.js:343:        model,
+  index.js:344:        temperature: 0.2,
+  index.js:345:        max_tokens: 4000,
+  index.js:346:        stream: false,
+  index.js:347:        messages: [
+  index.js:348:          {
+  index.js:349:            role: "system",
+  index.js:435:app.get("/api/image-catalog", async (_req, res) => {
+  index.js:436:  try {
+  index.js:437:    const catalogPath = process.env.OMNIROUTE_IMAGE_CATALOG || new URL("./omniroute-image-catalog.txt", import.meta.url);
+  index.js:438:    const raw = await readFile(catalogPath, "utf8");
+  index.js:439:    const parsed = JSON.parse(raw.replace(/^\uFEFF/, ""));
+> index.js:440:    const models = (parsed.data || [])
+  index.js:441:      .filter(item => item.type === "image" && item.id)
+  index.js:442:      .map(item => ({
+  index.js:443:        id: item.id,
+  index.js:444:        name: item.name || item.id,
+  index.js:445:        provider: item.owned_by || item.id.split("/")[0],
+  index.js:446:        sizes: item.supported_sizes || [],
+  index.js:447:        input_modalities: item.input_modalities || [],
+  index.js:448:        output_modalities: item.output_modalities || []
+  index.js:449:      }));
+> index.js:450:    res.json({ ok: true, count: models.length, models });
+  index.js:451:  } catch (error) {
+  index.js:452:    res.status(500).json({ ok: false, error: "Katalog lokal tidak dapat dibaca.", detail: error.message });
+  index.js:453:  }
+  index.js:454:});
+  index.js:455:
+  index.js:456:// ==========================================
+  index.js:457:// MODEL LABORATORY: TEST ONE IMAGE MODEL
+  index.js:458:// Deliberately tests only one model per request.
+  index.js:459:// ==========================================
+  index.js:460:app.post("/api/test-image-model", async (req, res) => {
+  index.js:461:  const startedAt = Date.now();
+  index.js:462:  try {
+  index.js:463:    const { model, prompt, size = "1024x1024" } = req.body || {};
+  index.js:464:    if (typeof model !== "string" || !model.trim() || typeof prompt !== "string" || !prompt.trim()) {
+  index.js:465:      return res.status(400).json({ ok: false, category: "invalid_request", error: "Model dan prompt wajib diisi." });
+  index.js:466:    }
+> index.js:467:    const response = await omniFetch("/v1/images/generations", {
+  index.js:468:      method: "POST",
+  index.js:469:      headers: { "Content-Type": "application/json" },
+  index.js:470:      body: JSON.stringify({
+  index.js:471:        model: model.trim(),
+  index.js:472:        prompt: prompt.trim(),
+  index.js:473:        size,
+  index.js:474:        n: 1,
+  index.js:475:        response_format: "b64_json"
+  index.js:476:      })
+  index.js:477:    });
+  index.js:478:    const raw = await response.text();
+  index.js:479:    const latencyMs = Date.now() - startedAt;
+  index.js:518:});
+  index.js:519:
+  index.js:520:// ==========================================
+  index.js:521:// GENERATE IMAGE / ILLUSTRATION
+  index.js:522:// ==========================================
+> index.js:523:app.post("/api/generate-image", async (req, res) => {
+  index.js:524:  try {
+  index.js:525:    const { model, prompt } = req.body || {};
+  index.js:526:
+  index.js:527:    if (!model || !prompt) {
+  index.js:528:      return res.status(400).json({
+  index.js:529:        error: "Model gambar dan prompt wajib diisi."
+  index.js:530:      });
+  index.js:531:    }
+  index.js:532:
+> index.js:533:    const response = await omniFetch("/v1/images/generations", {
+  index.js:534:      method: "POST",
+  index.js:535:      headers: {
+  index.js:536:        "Content-Type": "application/json"
+  index.js:537:      },
+  index.js:538:      body: JSON.stringify({
+  index.js:539:        model,
+  index.js:540:        prompt: `${prompt}. Educational editorial illustration, clean shapes, high visual clarity, no text, no letters, no watermark.`,
+  index.js:541:        size: "1024x1024",
+  index.js:542:        n: 1,
+  index.js:543:        response_format: "b64_json"
+  index.js:544:      })
+  index.js:545:    });
+
+
+
